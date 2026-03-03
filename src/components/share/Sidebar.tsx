@@ -52,10 +52,10 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "flex h-screen sticky bottom-0 top-0 flex-col bg-[#CAE7FF] z-50 transition-transform duration-300",
+          "flex h-screen sticky bottom-0 top-0 flex-col bg-[#CAE7FF] z-50 transition-transform duration-300 overflow-auto",
           // Mobile এ
           "fixed lg:static",
-          "w-[280px] sm:w-[300px] lg:w-[350px]",
+          "w-[240px] sm:w-[250px] lg:w-[300px]",
           // Mobile এ hide/show control
           isMobileMenuOpen
             ? "translate-x-0"
