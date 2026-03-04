@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import React from "react";
 
 function OverViewCard() {
@@ -10,9 +11,11 @@ function OverViewCard() {
           <h1 className="text-2xl font-semibold text-[#272727]">Over View</h1>
           <p className="text-base text-[#929292] mt-3">Dashboard</p>
         </div>
+        <Link href="/all-product/add-product">
         <button className="bg-[#0024DA] hover:bg-[#0024DA]/90 text-white text-sm font-medium px-4 h-[48px] rounded-lg transition-colors duration-200">
           Add Product +
         </button>
+        </Link>
       </div>
 
       {/* Cards Grid */}

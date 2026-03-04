@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Grip, ShoppingBasket, Menu, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBasket, Menu, X, LayoutPanelLeft, HandCoins, User, ClipboardList, Settings } from "lucide-react";
 import { LogoutModal } from "../Dialogs/LogoutModal";
 import { useState } from "react";
 import Image from "next/image";
@@ -11,13 +11,15 @@ import Image from "next/image";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   {
-    name: "Requested Products",
-    href: "/requested-product",
-    icon: LayoutDashboard,
+    name: "All Products",
+    href: "/all-product",
+    icon: LayoutPanelLeft,
   },
-  { name: "Main Category", href: "/category", icon: Grip },
-  { name: "Sub Category", href: "/sub-category", icon: ShoppingBasket },
-  { name: "Seller Categories", href: "/sr-category", icon: ShoppingBasket },
+  { name: "All Treatment", href: "/all-treatment", icon: HandCoins },
+  { name: "User List", href: "/all-users", icon: User  },
+  { name: "Order History", href: "/order-history", icon: ClipboardList },
+  { name: "Contact Messages", href: "/contact-messages", icon: ShoppingBasket },
+  { name: "Setting", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
