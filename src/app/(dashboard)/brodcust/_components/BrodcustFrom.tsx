@@ -27,7 +27,7 @@ function BrodcustFrom() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${TOKEN}`,
           },
-          body: JSON.stringify({ subject, description }),
+          body: JSON.stringify({ subject, html:description }),
         }
       );
 

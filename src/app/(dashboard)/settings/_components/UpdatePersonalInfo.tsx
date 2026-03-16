@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, Pencil } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Eye, EyeOff, Pencil, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function UpdatePersonalInfo() {
   const queryClient = useQueryClient();
 
-  // Password visibility state
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     newPass: false,
@@ -36,18 +36,36 @@ export default function UpdatePersonalInfo() {
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-  // Form state for user info
+  // ─── Profile Form State ───────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
     email: "",
     dateOfBirth: "",
     gender: "",
     address: "",
     avatar: "/images/default-avatar.png",
-    currentPassword: "",
+  });
+
+  // ─── Password Form State ──────────────────────────────────────────────
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
+
+  // ─── Avatar Upload State ──────────────────────────────────────────────
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({ ...prev, avatar: previewUrl }));
+  };
 
   const labelClass = "text-base font-medium text-[#707070]";
   const inputClass =
@@ -55,13 +73,13 @@ export default function UpdatePersonalInfo() {
   const selectClass =
     "h-[48px] rounded-[4px] border-[#0000001A] text-base text-[#272727] [&>span]:text-base [&>span]:text-[#272727]";
 
+  const session = useSession();
+  const userId = session?.data?.user?.id;
+  const TOKEN = session?.data?.user?.accessToken;
 
-    const session = useSession();
-    const userId = session?.data?.user?.id;
-    const TOKEN = session?.data?.user?.accessToken;
+  const router = useRouter();
 
-
-  // Fetch single user data
+  // ─── Fetch User ───────────────────────────────────────────────────────
   const { data: singleUser, isSuccess } = useQuery({
     queryKey: ["singleUser"],
     queryFn: async () => {
@@ -71,7 +89,7 @@ export default function UpdatePersonalInfo() {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${TOKEN}`,
           },
         }
       );
@@ -80,46 +98,54 @@ export default function UpdatePersonalInfo() {
     },
   });
 
-  // Populate formData when API responds
+  // ─── Populate Form ────────────────────────────────────────────────────
   useEffect(() => {
     if (isSuccess && singleUser?.data) {
       const user = singleUser.data;
       setFormData({
-        fullName: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        dateOfBirth: user.dateOfBirth || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        phoneNumber: user.phoneNumber || "",
+        email: user.email || "",
+        dateOfBirth: user.dateOfBirth ? user.dateOfBirth.split("T")[0] : "",
         gender: user.gender || "",
         address: user.address || "",
-        avatar: user.profileImage || "/images/default-avatar.png",
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
+        avatar: user.profilePicture || "/images/default-avatar.png",
       });
     }
   }, [isSuccess, singleUser]);
 
-  // Update user info mutation
+  // ─── Update Profile Mutation ──────────────────────────────────────────
   const updateUserMutation = useMutation({
-    mutationFn: async (updatedData: {
-      fullName: string;
-      email: string;
-      dateOfBirth: string;
-      gender: string;
-      address: string;
-      avatar: string;
-      currentPassword: string;
-      newPassword: string;
-      confirmPassword: string;
-    }) => {
+    mutationFn: async () => {
+      const formDataPayload = new FormData();
+
+      if (formData.firstName.trim())
+        formDataPayload.append("firstName", formData.firstName.trim());
+      if (formData.lastName.trim())
+        formDataPayload.append("lastName", formData.lastName.trim());
+      if (formData.phoneNumber.trim())
+        formDataPayload.append("phoneNumber", formData.phoneNumber.trim());
+      if (formData.dateOfBirth)
+        formDataPayload.append(
+          "dateOfBirth",
+          new Date(formData.dateOfBirth).toISOString()
+        );
+      if (formData.gender)
+        formDataPayload.append("gender", formData.gender);
+      if (formData.address.trim())
+        formDataPayload.append("address", formData.address.trim());
+      if (avatarFile)
+        formDataPayload.append("profilePicture", avatarFile);
+
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/user/${userId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/user/profile`,
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${TOKEN}`,
           },
-          body: JSON.stringify(updatedData),
+          body: formDataPayload,
         }
       );
       if (!res.ok) throw new Error("Failed to update user");
@@ -127,17 +153,30 @@ export default function UpdatePersonalInfo() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["singleUser"] });
+      setAvatarFile(null);
       toast.success("Profile updated successfully");
     },
     onError: (err) => {
-      console.error(err);
-      toast.error("Failed to update profile");
+      toast.error(err?.message || "Failed to update profile");
     },
   });
 
-  // Change password mutation
+  // ─── Change Password Mutation ─────────────────────────────────────────
   const changePasswordMutation = useMutation({
-    mutationFn: async (passwordData: { oldPassword: string; newPassword: string; confirmPassword: string }) => {
+    mutationFn: async () => {
+      if (!passwordData.oldPassword.trim())
+        throw new Error("Please enter your current password.");
+      if (!passwordData.newPassword.trim())
+        throw new Error("Please enter a new password.");
+      if (passwordData.newPassword !== passwordData.confirmPassword)
+        throw new Error("New password and confirm password do not match.");
+
+      const payload = {
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+        // confirmPassword: passwordData.confirmPassword,
+      };
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/auth/change-password`,
         {
@@ -146,19 +185,23 @@ export default function UpdatePersonalInfo() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${TOKEN}`,
           },
-          body: JSON.stringify(passwordData),
+          body: JSON.stringify(payload),
         }
       );
-      if (!res.ok) throw new Error("Failed to change password");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData?.message || "Failed to change password");
+      }
       return res.json();
     },
     onSuccess: () => {
       setShowPasswordModal(false);
+      setPasswordData({ oldPassword: "", newPassword: "", confirmPassword: "" });
       toast.success("Password changed successfully");
+      router.push('/signin')
     },
     onError: (err) => {
-      toast.error("Failed to change password");
-      console.error(err);
+      toast.error(err?.message || "Failed to change password");
     },
   });
 
@@ -181,23 +224,33 @@ export default function UpdatePersonalInfo() {
         <div className="flex items-center gap-4">
           <div className="relative w-[120px] h-[120px] shrink-0">
             <Image
-            width={300}
-            height={300}
+              width={300}
+              height={300}
               src={formData.avatar}
               alt="Profile"
               className="w-[120px] h-[120px] rounded-full object-cover border-2 border-gray-200"
             />
             <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-0 right-0 w-7 h-7 bg-blue-600 hover:bg-blue-700 border-2 border-white rounded-full flex items-center justify-center transition-colors"
               title="Change photo"
             >
               <Pencil className="w-[10px] h-[10px] text-white" />
             </button>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
           </div>
 
           <div>
             <p className="font-bold text-[20px] text-[#131313] leading-tight">
-              {formData.fullName}
+              {formData.firstName} {formData.lastName}
             </p>
             <p className="text-[16px] text-[#616161] mt-0.5">
               @{formData.email.split("@")[0]}
@@ -215,10 +268,20 @@ export default function UpdatePersonalInfo() {
           </Button>
           <Button
             className="bg-[#0024DA] hover:bg-[#0024DA]/90 text-white font-semibold text-base h-[43px] px-5 flex items-center gap-2"
-            onClick={() => updateUserMutation.mutate(formData)}
+            disabled={updateUserMutation.isPending}
+            onClick={() => updateUserMutation.mutate()}
           >
-            <Pencil className="w-3.5 h-3.5" />
-            Update Profile
+            {updateUserMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <Pencil className="w-3.5 h-3.5" />
+                Update Profile
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -226,12 +289,25 @@ export default function UpdatePersonalInfo() {
       {/* Form Fields */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-7 gap-y-5">
         <div className="flex flex-col gap-1.5">
-          <Label className={labelClass}>Full Name</Label>
+          <Label className={labelClass}>First Name</Label>
           <Input
-            value={formData.fullName}
+            value={formData.firstName}
             onChange={(e) =>
-              setFormData((prev) => ({ ...prev, fullName: e.target.value }))
+              setFormData((prev) => ({ ...prev, firstName: e.target.value }))
             }
+            placeholder="Enter first name"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className={labelClass}>Last Name</Label>
+          <Input
+            value={formData.lastName}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, lastName: e.target.value }))
+            }
+            placeholder="Enter last name"
             className={inputClass}
           />
         </div>
@@ -247,10 +323,22 @@ export default function UpdatePersonalInfo() {
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <Label className={labelClass}>Phone Number</Label>
+          <Input
+            value={formData.phoneNumber}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, phoneNumber: e.target.value }))
+            }
+            placeholder="Enter phone number"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <Label className={labelClass}>Date of Birth</Label>
           <Input
+            type="date"
             value={formData.dateOfBirth}
-            placeholder="YYYY-MM-DD"
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, dateOfBirth: e.target.value }))
             }
@@ -305,15 +393,22 @@ export default function UpdatePersonalInfo() {
               <div className="relative">
                 <Input
                   type={showPasswords.current ? "text" : "password"}
+                  value={passwordData.oldPassword}
                   className={`${inputClass} pr-10`}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, currentPassword: e.target.value }))
+                    setPasswordData((prev) => ({
+                      ...prev,
+                      oldPassword: e.target.value,
+                    }))
                   }
                 />
                 <button
                   type="button"
                   onClick={() =>
-                    setShowPasswords((prev) => ({ ...prev, current: !prev.current }))
+                    setShowPasswords((prev) => ({
+                      ...prev,
+                      current: !prev.current,
+                    }))
                   }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#707070] hover:text-[#272727]"
                 >
@@ -331,15 +426,22 @@ export default function UpdatePersonalInfo() {
               <div className="relative">
                 <Input
                   type={showPasswords.newPass ? "text" : "password"}
+                  value={passwordData.newPassword}
                   className={`${inputClass} pr-10`}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, newPassword: e.target.value }))
+                    setPasswordData((prev) => ({
+                      ...prev,
+                      newPassword: e.target.value,
+                    }))
                   }
                 />
                 <button
                   type="button"
                   onClick={() =>
-                    setShowPasswords((prev) => ({ ...prev, newPass: !prev.newPass }))
+                    setShowPasswords((prev) => ({
+                      ...prev,
+                      newPass: !prev.newPass,
+                    }))
                   }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#707070] hover:text-[#272727]"
                 >
@@ -357,15 +459,22 @@ export default function UpdatePersonalInfo() {
               <div className="relative">
                 <Input
                   type={showPasswords.confirm ? "text" : "password"}
+                  value={passwordData.confirmPassword}
                   className={`${inputClass} pr-10`}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                    setPasswordData((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
                   }
                 />
                 <button
                   type="button"
                   onClick={() =>
-                    setShowPasswords((prev) => ({ ...prev, confirm: !prev.confirm }))
+                    setShowPasswords((prev) => ({
+                      ...prev,
+                      confirm: !prev.confirm,
+                    }))
                   }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#707070] hover:text-[#272727]"
                 >
@@ -379,20 +488,25 @@ export default function UpdatePersonalInfo() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <Button variant="outline" onClick={() => setShowPasswordModal(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowPasswordModal(false)}
+              >
                 Cancel
               </Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px]"
-                onClick={() =>
-                  changePasswordMutation.mutate({
-                    oldPassword: formData.currentPassword,
-                    newPassword: formData.newPassword,
-                    confirmPassword: formData.confirmPassword,
-                  })
-                }
+                disabled={changePasswordMutation.isPending}
+                onClick={() => changePasswordMutation.mutate()}
               >
-                Save Password
+                {changePasswordMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Password"
+                )}
               </Button>
             </div>
           </div>
